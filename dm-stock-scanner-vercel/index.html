@@ -661,8 +661,12 @@ async function testApiKey(key,isSetup){
     showLoading(true);
     debugLog('API key testen...',{keyPrefix:key.substring(0,10)+'...',isSetup});
     try{
-        const url=`https://corsproxy.io/?${encodeURIComponent('https://api.notion.com/v1/databases/'+STOCK_DB)}`;
-        debugLog('Test URL',url);
+        // Gebruik eigen Vercel proxy in productie
+        const isLocalhost=window.location.hostname==='localhost'||window.location.hostname==='127.0.0.1';
+        const url=isLocalhost
+            ?`https://corsproxy.io/?${encodeURIComponent('https://api.notion.com/v1/databases/'+STOCK_DB)}`
+            :`/api/notion?path=${encodeURIComponent('/v1/databases/'+STOCK_DB)}`;
+        debugLog('Test URL',{url,proxy:isLocalhost?'corsproxy':'vercel'});
         const res=await fetch(url,{headers:{'Authorization':`Bearer ${key}`,'Notion-Version':'2022-06-28'}});
         debugLog('Test response',{status:res.status,ok:res.ok});
         if(!res.ok){
@@ -698,13 +702,25 @@ async function startApp(){
 
 // === API ===
 async function notionRequest(endpoint,method='GET',body=null){
-    const url=`https://api.notion.com/v1${endpoint}`;
-    const opts={method,headers:{'Authorization':`Bearer ${apiKey}`,'Notion-Version':'2022-06-28','Content-Type':'application/json'}};
+    // Gebruik eigen Vercel proxy in productie, corsproxy als fallback voor dev
+    const isLocalhost=window.location.hostname==='localhost'||window.location.hostname==='127.0.0.1';
+    const proxyUrl=isLocalhost
+        ?`https://corsproxy.io/?${encodeURIComponent('https://api.notion.com/v1'+endpoint)}`
+        :`/api/notion?path=${encodeURIComponent('/v1'+endpoint)}`;
+    
+    const opts={
+        method,
+        headers:{
+            'Authorization':`Bearer ${apiKey}`,
+            'Notion-Version':'2022-06-28',
+            'Content-Type':'application/json'
+        }
+    };
     if(body)opts.body=JSON.stringify(body);
     
-    debugLog(`API ${method} ${endpoint}`);
+    debugLog(`API ${method} ${endpoint}`,{proxy:isLocalhost?'corsproxy':'vercel'});
     
-    const res=await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`,opts);
+    const res=await fetch(proxyUrl,opts);
     
     if(!res.ok){
         const errorText=await res.text();
